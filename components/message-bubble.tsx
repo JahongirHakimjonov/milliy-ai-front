@@ -54,6 +54,7 @@ export function MessageBubble({message, user, isLast: _isLast}: MessageBubblePro
                                     onClick={(e) => { e.preventDefault(); handleDownload(href, name) }}
                                     className="block"
                                     download={name}
+                                    target="_blank"
                                 >
                                     <img
                                         src={href}
