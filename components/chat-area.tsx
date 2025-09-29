@@ -87,7 +87,7 @@ export function ChatArea({chatId}: ChatAreaProps) {
     }
 
     // Разрешённые расширения
-    const allowedExt = new Set(["pdf", "doc", "docx", "pptx", "txt"]) as Set<string>
+    const allowedExt = new Set(["pdf", "doc", "docx", "pptx"]) as Set<string>
 
     const uploadFiles = async (files: FileList | null) => {
         if (!files || files.length === 0) return
