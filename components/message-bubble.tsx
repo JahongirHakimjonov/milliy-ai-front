@@ -60,6 +60,10 @@ export function MessageBubble({message, user, isLast: _isLast}: MessageBubblePro
                                         src={href}
                                         alt={name}
                                         className={cn("max-h-64 w-auto rounded border border-border", isUser ? "ml-auto" : "")}
+                                        onError={(e) => {
+                                            e.currentTarget.onerror = null
+                                            e.currentTarget.src = "/placeholder.svg"
+                                        }}
                                     />
                                     <div className={cn("text-xs mt-1 truncate text-foreground/80", isUser ? "text-right" : "")}>{name}</div>
                                 </a>
