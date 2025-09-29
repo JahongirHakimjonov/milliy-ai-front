@@ -10,11 +10,33 @@ export type Sender = {
     avatar?: string | undefined
 } | null
 
+export type File = {
+    id: number
+    user: number
+    name: string
+    size: number
+    file: string
+    type: string
+    created_at: string
+}
+
 export interface Message {
     id: number
     message: string
     sender?: Sender
+    file?: File[]
     created_at: string
+}
+
+// утилита: upsert по id + сортировка по времени
+const sortAndDedup = (list: Message[]) => {
+    const byId = new Map<number, Message>()
+    for (const m of list) {
+        byId.set(m.id, m)
+    }
+    return Array.from(byId.values()).sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    )
 }
 
 /**
@@ -25,7 +47,6 @@ export function useMessages(chatId: number | null) {
     const [pendingAIMessage, setPendingAIMessage] = useState<Message | null>(null)
     const [isLoading, setIsLoading] = useState(false)
 
-    // use a ref to avoid stale closures when finishing AI message
     const pendingRef = useRef<Message | null>(null)
     pendingRef.current = pendingAIMessage
 
@@ -52,18 +73,16 @@ export function useMessages(chatId: number | null) {
             )
 
             if (!res.ok) {
-                // optionally handle 401/403 specifically
                 console.error("Failed to fetch messages:", res.status, await res.text())
                 setIsLoading(false)
                 return
             }
 
             const data = await res.json()
-            setMessages(Array.isArray(data.data) ? data.data : [])
+            const serverList: Message[] = Array.isArray(data.data) ? data.data : []
+            setMessages(sortAndDedup(serverList))
         } catch (err: any) {
-            if (err.name === "AbortError") {
-                // ignore abort
-            } else {
+            if (err.name !== "AbortError") {
                 console.error("Failed to fetch messages:", err)
             }
         } finally {
@@ -78,11 +97,10 @@ export function useMessages(chatId: number | null) {
     }, [fetchMessages])
 
     /**
-     * Append a message locally. If a user message arrives, cancel any pending AI draft.
+     * Append or update a message locally. If a human message arrives, cancel any pending AI draft.
      */
     const addMessage = useCallback((message: Message) => {
-        setMessages(prev => [...prev, message])
-        // If a human (sender exists) message gets added, it usually means AI draft should be reset.
+        setMessages(prev => sortAndDedup([...prev, message]))
         if (message.sender) {
             setPendingAIMessage(null)
         }
@@ -96,7 +114,7 @@ export function useMessages(chatId: number | null) {
             if (!prev) {
                 const created = new Date().toISOString()
                 const newMsg: Message = {
-                    id: Date.now(),
+                    id: -Date.now(), // временный локальный id
                     message: chunk,
                     sender: null,
                     created_at: created,
@@ -108,19 +126,18 @@ export function useMessages(chatId: number | null) {
     }, [])
 
     /**
-     * Finalize pending AI message: push it into messages and refetch from server to get canonical data.
+     * Finalize pending AI message: clear draft and refetch canonical data.
      */
     const finishAIMessage = useCallback(async () => {
-        // push local pending if exists
-        if (pendingRef.current) {
-            setMessages(prev => [...prev, pendingRef.current as Message])
-            setPendingAIMessage(null)
+        if (!pendingRef.current) {
+            return
         }
-        // fetch latest from backend to make sure local state is canonical
+        // не добавляем локальный pending в список, чтобы избежать дублей
+        setPendingAIMessage(null)
         try {
             await fetchMessages()
-        } catch (err) {
-            // fetchMessages already handles and logs
+        } catch {
+            // уже залогировано внутри fetchMessages
         }
     }, [fetchMessages])
 
